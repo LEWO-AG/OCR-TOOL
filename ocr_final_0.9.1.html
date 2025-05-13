@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR-Tool (Fehlerbehebung)</title>
+    <!-- Tesseract.js in einer älteren, stabileren Version -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@2.1.5/dist/tesseract.min.js"></script>
+    <!-- PDF.js Bibliothek -->
+    <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.min.js"></script>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --light-color: #ecf0f1;
+            --dark-color: #34495e;
+            --success-color: #27ae60;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: var(--dark-color);
+            background-color: var(--light-color);
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            overflow: hidden;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        h1 {
+            color: var(--primary-color);
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: var(--secondary-color);
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .upload-area {
+            width: 100%;
+            max-width: 800px;
+            border: 3px dashed #ccc;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .upload-area:hover, .upload-area.dragover {
+            border-color: var(--secondary-color);
+            background-color: rgba(52, 152, 219, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 48px;
+            color: var(--secondary-color);
+            margin-bottom: 15px;
+        }
+
+        .file-info {
+            font-size: 1rem;
+            margin-top: 10px;
+            color: #666;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .options-section {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .option-group {
+            margin: 0 15px;
+        }
+
+        .option-label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        select, input[type="number"] {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            min-width: 150px;
+        }
+
+        .process-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin: 20px auto;
+            display: block;
+        }
+
+        .process-btn:hover {
+            background-color: #2980b9;
+        }
+
+        .process-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 800px;
+            margin: 20px auto;
+            display: none;
+        }
+
+        progress {
+            width: 100%;
+            height: 20px;
+            appearance: none;
+            border: none;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        progress::-webkit-progress-bar {
+            background-color: #eee;
+            border-radius: 10px;
+        }
+
+        progress::-webkit-progress-value {
+            background-color: var(--secondary-color);
+            border-radius: 10px;
+        }
+
+        progress::-moz-progress-bar {
+            background-color: var(--secondary-color);
+            border-radius: 10px;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 10px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .result-section {
+            margin-top: 30px;
+            display: none;
+        }
+
+        .result-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .result-text {
+            flex: 1;
+            min-width: 300px;
+        }
+
+        .result-preview {
+            flex: 1;
+            min-width: 300px;
+            max-height: 500px;
+            overflow: hidden;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .result-textarea {
+            width: 100%;
+            height: 400px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            resize: vertical;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .copy-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            font-size: 0.9rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .copy-btn:hover {
+            background-color: var(--dark-color);
+        }
+
+        .preview-img {
+            max-width: 100%;
+            max-height: 400px;
+            object-fit: contain;
+        }
+
+        .error-message {
+            color: var(--accent-color);
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid var(--accent-color);
+            border-radius: 4px;
+            background-color: rgba(231, 76, 60, 0.1);
+            display: none;
+        }
+
+        .source-info {
+            background-color: #f8f9fa;
+            border-left: 4px solid var(--secondary-color);
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            color: var(--dark-color);
+        }
+
+        .source-info-icon {
+            margin-right: 10px;
+            font-size: 1.2rem;
+        }
+
+        .debug-section {
+            margin-top: 30px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: #f9f9f9;
+            display: none;
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 15px;
+            }
+            
+            .upload-area {
+                padding: 20px;
+            }
+            
+            .result-container {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>LEWO-OCR-Tool</h1>
+            <p class="subtitle">Texterkennung direkt im Browser</p>
+        </header>
+
+        <div class="upload-section">
+            <div id="dropArea" class="upload-area">
+                <div class="upload-icon">📄</div>
+                <h3>Datei hier ablegen oder klicken zum Auswählen</h3>
+                <p>Unterstützte Formate: PDF, PNG, JPG, BMP, TIFF</p>
+                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.bmp,.tiff,.tif">
+                <div id="fileInfo" class="file-info"></div>
+            </div>
+        </div>
+
+        <div class="options-section">
+            <div class="option-group">
+                <label class="option-label">Sprache:</label>
+                <select id="languageSelect">
+                    <option value="deu+eng">Deutsch + Englisch</option>
+                    <option value="deu">Nur Deutsch</option>
+                    <option value="eng">Nur Englisch</option>
+                </select>
+            </div>
+        </div>
+
+        <button id="processBtn" class="process-btn" disabled>Text erkennen</button>
+
+        <div id="progressContainer" class="progress-container">
+            <progress id="progressBar" value="0" max="100"></progress>
+            <div id="statusText" class="status">Verarbeitung wird gestartet...</div>
+        </div>
+
+        <div id="errorMessage" class="error-message"></div>
+
+        <div id="resultSection" class="result-section">
+            <div class="result-container">
+                <div class="result-text">
+                    <h3>Erkannter Text</h3>
+                    <div id="sourceInfo" class="source-info" style="display: none;">
+                        <span class="source-info-icon">ℹ️</span>
+                        <span id="sourceInfoText">Text wurde erkannt durch: </span>
+                    </div>
+                    <textarea id="resultText" class="result-textarea" readonly></textarea>
+                    <div class="button-group">
+                        <button id="copyBtn" class="copy-btn">Text kopieren</button>
+                        <button id="saveBtn" class="copy-btn">Als Textdatei speichern</button>
+                    </div>
+                </div>
+                
+                <div class="result-preview">
+                    <h3>Vorschau</h3>
+                    <div id="previewContainer"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="debugSection" class="debug-section">
+            <h3>Debug-Informationen</h3>
+            <pre id="debugInfo"></pre>
+        </div>
+
+        <footer>
+            <p>Diese Anwendung verwendet Tesseract.js und PDF.js</p>
+            <p><a href="#" id="toggleDebug">Debug-Modus anzeigen</a></p>
+        </footer>
+    </div>
+
+    <script>
+        // PDF.js Worker Pfad
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.16.105/build/pdf.worker.min.js';
+
+        // Globale Variablen
+        let selectedFile = null;
+        let pdfDocument = null;
+        let totalPages = 0;
+        let currentPage = 0;
+        let extractedText = '';
+        let extractedPdfText = ''; // Für maschinenlesbaren Text aus PDF
+        let textSource = ''; // Neue Variable für die Textquelle
+        let debugMode = false;
+
+        // DOM-Elemente
+        const dropArea = document.getElementById('dropArea');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const processBtn = document.getElementById('processBtn');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const statusText = document.getElementById('statusText');
+        const resultSection = document.getElementById('resultSection');
+        const resultText = document.getElementById('resultText');
+        const copyBtn = document.getElementById('copyBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const previewContainer = document.getElementById('previewContainer');
+        const errorMessage = document.getElementById('errorMessage');
+        const debugSection = document.getElementById('debugSection');
+        const debugInfo = document.getElementById('debugInfo');
+        const toggleDebug = document.getElementById('toggleDebug');
+        const languageSelect = document.getElementById('languageSelect');
+        const sourceInfo = document.getElementById('sourceInfo');
+        const sourceInfoText = document.getElementById('sourceInfoText');
+
+        // Debug-Modus umschalten
+        toggleDebug.addEventListener('click', function(e) {
+            e.preventDefault();
+            debugMode = !debugMode;
+            debugSection.style.display = debugMode ? 'block' : 'none';
+            this.textContent = debugMode ? 'Debug-Modus ausblenden' : 'Debug-Modus anzeigen';
+        });
+
+        // Debug-Informationen hinzufügen
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            debugInfo.textContent += `[${timestamp}] ${message}\n`;
+            console.log(message);
+        }
+
+        // Event-Listener für Drag-and-Drop
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropArea.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropArea.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight() {
+            dropArea.classList.add('dragover');
+        }
+
+        function unhighlight() {
+            dropArea.classList.remove('dragover');
+        }
+
+        // Datei per Drag-and-Drop
+        dropArea.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files.length) {
+                handleFile(files[0]);
+            }
+        }
+
+        // Datei per Klick auswählen
+        dropArea.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // Datei verarbeiten
+        function handleFile(file) {
+            selectedFile = file;
+            fileInfo.textContent = `Ausgewählte Datei: ${file.name} (${formatFileSize(file.size)})`;
+            processBtn.disabled = false;
+            errorMessage.style.display = 'none';
+            extractedPdfText = ''; // Reset des extrahierten PDF-Texts
+            textSource = ''; // Reset der Textquelle
+            sourceInfo.style.display = 'none'; // Verstecke den Quellinfo-Block
+            
+            log(`Datei ausgewählt: ${file.name}, Typ: ${file.type}, Größe: ${formatFileSize(file.size)}`);
+            
+            // Vorschau anzeigen
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    previewContainer.innerHTML = `<img src="${e.target.result}" class="preview-img" alt="Vorschau">`;
+                    resultSection.style.display = 'block';
+                    resultText.value = '';
+                    log('Bildvorschau erstellt');
+                };
+                reader.readAsDataURL(file);
+            } else if (file.type === 'application/pdf') {
+                const reader = new FileReader();
+                reader.onload = async function(e) {
+                    try {
+                        log('PDF-Datei geladen, versuche zu parsen...');
+                        // PDF.js initialisieren
+                        const pdfData = new Uint8Array(e.target.result);
+                        pdfDocument = await pdfjsLib.getDocument({data: pdfData}).promise;
+                        totalPages = pdfDocument.numPages;
+                        log(`PDF erfolgreich geparst. Enthält ${totalPages} Seiten.`);
+                        
+                        // Erste Seite als Vorschau rendern
+                        const page = await pdfDocument.getPage(1);
+                        const viewport = page.getViewport({scale: 1.0});
+                        
+                        // Canvas erstellen
+                        const canvas = document.createElement('canvas');
+                        const context = canvas.getContext('2d');
+                        canvas.height = viewport.height;
+                        canvas.width = viewport.width;
+                        canvas.classList.add('preview-img');
+                        
+                        // PDF-Seite rendern
+                        await page.render({
+                            canvasContext: context,
+                            viewport: viewport
+                        }).promise;
+                        
+                        previewContainer.innerHTML = '';
+                        previewContainer.appendChild(canvas);
+                        resultSection.style.display = 'block';
+                        resultText.value = '';
+                        
+                        fileInfo.textContent = `Ausgewählte Datei: ${file.name} (${formatFileSize(file.size)}, ${totalPages} Seiten)`;
+                        log('PDF-Vorschau erstellt');
+                    } catch (error) {
+                        console.error('Fehler beim Laden der PDF:', error);
+                        log(`PDF-Fehler: ${error.message}`);
+                        showError('Die PDF-Datei konnte nicht geladen werden. Bitte versuchen Sie es mit einer anderen Datei.');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        }
+
+        // OCR-Verarbeitung starten
+        processBtn.addEventListener('click', startOCR);
+
+        async function startOCR() {
+            if (!selectedFile) return;
+            
+            // UI aktualisieren
+            processBtn.disabled = true;
+            progressContainer.style.display = 'block';
+            errorMessage.style.display = 'none';
+            resultText.value = '';
+            extractedText = '';
+            extractedPdfText = '';
+            textSource = '';
+            sourceInfo.style.display = 'none';
+            
+            try {
+                log('OCR-Prozess gestartet');
+                
+                // Sprache auswählen
+                const lang = languageSelect.value;
+                log(`Gewählte Sprache: ${lang}`);
+                
+                // Tesseract Worker erstellen
+                log('Tesseract Worker wird initialisiert...');
+                statusText.textContent = 'Initialisiere Texterkennung...';
+                progressBar.value = 10;
+                
+                const worker = Tesseract.createWorker({
+                    logger: progress => {
+                        if (progress.status === 'recognizing text') {
+                            progressBar.value = 50 + (progress.progress * 40);
+                        }
+                        log(`Tesseract-Status: ${progress.status}, Fortschritt: ${progress.progress}`);
+                    }
+                });
+                
+                log('Worker erstellt, lade Sprachdaten...');
+                statusText.textContent = 'Lade Sprachdaten...';
+                progressBar.value = 20;
+                
+                await worker.load();
+                await worker.loadLanguage(lang);
+                await worker.initialize(lang);
+                
+                log('Sprachdaten geladen und initialisiert');
+                progressBar.value = 30;
+                
+                // PDF oder Bild verarbeiten
+                if (selectedFile.type === 'application/pdf') {
+                    log(`Beginne PDF-Verarbeitung (${totalPages} Seiten)`);
+                    
+                    // NEUE FUNKTIONALITÄT: Erst prüfen ob PDF maschinenlesbaren Text enthält
+                    log('Prüfe auf maschinenlesbaren Text in der PDF...');
+                    statusText.textContent = 'Prüfe auf maschinenlesbaren Text...';
+                    extractedPdfText = await extractTextFromPdf();
+                    
+                    // Prüfen, ob Text aus PDF extrahiert werden konnte
+                    const hasPdfText = extractedPdfText && extractedPdfText.trim().length > 0;
+                    
+                    if (hasPdfText) {
+                        log(`Maschinenlesbarer Text in PDF gefunden (${extractedPdfText.length} Zeichen)`);
+                        statusText.textContent = 'Maschinenlesbarer Text gefunden, führe zusätzlich OCR durch...';
+                    } else {
+                        log('Kein maschinenlesbarer Text in PDF gefunden, verwende nur OCR');
+                        statusText.textContent = 'Kein maschinenlesbarer Text gefunden, verwende OCR...';
+                    }
+                    
+                    // OCR trotzdem durchführen
+                    await processPdf(worker);
+                    
+                    // Wenn maschinenlesbarer Text gefunden wurde, vergleichen wir die Ergebnisse
+                    if (hasPdfText) {
+                        log('Vergleiche extrahierten Text mit OCR-Ergebnis...');
+                        statusText.textContent = 'Vergleiche Ergebnisse...';
+                        
+                        // Wähle das beste Ergebnis und setze die Quelle
+                        const [finalText, source] = chooseTheBetterResult(extractedPdfText, extractedText);
+                        extractedText = finalText;
+                        textSource = source;
+                        
+                        log(`Bestes Ergebnis ausgewählt: ${textSource}`);
+                    } else {
+                        textSource = 'OCR';
+                    }
+                } else {
+                    log('Beginne Bildverarbeitung');
+                    await processImage(worker, selectedFile);
+                    textSource = 'OCR';
+                }
+                
+                // Ergebnis anzeigen
+                resultText.value = extractedText;
+                
+                // Textquelle anzeigen
+                if (textSource) {
+                    sourceInfoText.textContent = `Text wurde erkannt durch: ${textSource}`;
+                    sourceInfo.style.display = 'flex';
+                }
+                
+                statusText.textContent = 'Verarbeitung abgeschlossen!';
+                progressBar.value = 100;
+                
+                // Worker freigeben
+                await worker.terminate();
+                log('OCR-Prozess abgeschlossen, Worker beendet');
+                
+            } catch (error) {
+                console.error('OCR-Fehler:', error);
+                log(`Schwerwiegender OCR-Fehler: ${error.message}`);
+                showError('Bei der Texterkennung ist ein Fehler aufgetreten. Bitte versuchen Sie es erneut.');
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+        
+        // NEUE FUNKTION: Text aus PDF extrahieren
+        async function extractTextFromPdf() {
+            if (!pdfDocument) return '';
+            
+            let extractedText = '';
+            
+            try {
+                log('Starte Textextraktion aus PDF...');
+                
+                for (let i = 1; i <= totalPages; i++) {
+                    log(`Extrahiere Text von Seite ${i}...`);
+                    
+                    const page = await pdfDocument.getPage(i);
+                    const textContent = await page.getTextContent();
+                    
+                    // Textelemente zusammenfügen
+                    const pageText = textContent.items.map(item => item.str).join(' ');
+                    
+                    log(`Text von Seite ${i} extrahiert (${pageText.length} Zeichen)`);
+                    
+                    extractedText += pageText + '\n\n';
+                }
+                
+                log(`Textextraktion aus PDF abgeschlossen. Insgesamt ${extractedText.length} Zeichen extrahiert.`);
+                return extractedText;
+                
+            } catch (error) {
+                log(`Fehler bei der Textextraktion: ${error.message}`);
+                return '';
+            }
+        }
+        
+        // GEÄNDERTE FUNKTION: Das bessere Ergebnis auswählen und Quelle zurückgeben
+        function chooseTheBetterResult(pdfText, ocrText) {
+            // Einfache Metriken zur Bewertung der Textqualität
+            const pdfTextQuality = calculateTextQuality(pdfText);
+            const ocrTextQuality = calculateTextQuality(ocrText);
+            
+            // Bestimme das Verhältnis der Qualitätswerte
+            const qualityRatio = pdfTextQuality / ocrTextQuality;
+            
+            log(`Textqualität PDF: ${pdfTextQuality}, OCR: ${ocrTextQuality}`);
+            log(`Qualitätsverhältnis (PDF/OCR): ${qualityRatio}`);
+            
+            // PDF-Text bevorzugen, wenn Qualität innerhalb eines Schwellenwerts liegt
+            // Hier bevorzugen wir PDF-Text, wenn er mindestens 90% der OCR-Qualität erreicht
+            if (qualityRatio >= 0.9) {
+                log('Verwende extrahierten PDF-Text (Qualität innerhalb des Toleranzbereichs)');
+                return [pdfText, 'PDF'];
+            } else {
+                log('Verwende OCR-Text (signifikant bessere Qualität)');
+                return [ocrText, 'OCR'];
+            }
+        }
+        
+        // NEUE FUNKTION: Textqualität berechnen
+        function calculateTextQuality(text) {
+            if (!text || text.trim().length === 0) return 0;
+            
+            // Einfache Qualitätsbewertung basierend auf:
+            // 1. Textlänge (mehr Text ist wahrscheinlich besser)
+            // 2. Verhältnis von Wörtern zu Gesamtzeichen (höher ist besser)
+            // 3. Durchschnittliche Wortlänge (extrem kurze Wörter könnten auf Fehler hindeuten)
+            
+            const cleanText = text.trim();
+            const totalLength = cleanText.length;
+            const words = cleanText.split(/\s+/).filter(word => word.length > 0);
+            const wordCount = words.length;
+            
+            if (wordCount === 0) return 0;
+            
+            const avgWordLength = totalLength / wordCount;
+            const wordToCharRatio = wordCount / totalLength;
+            
+            // Weniger Sonderzeichen ist in der Regel besser
+            const specialCharCount = (cleanText.match(/[^a-zA-Z0-9äöüÄÖÜß\s]/g) || []).length;
+            const specialCharRatio = specialCharCount / totalLength;
+            
+            // Gesamtbewertung berechnen (höher ist besser)
+            let quality = (totalLength * 0.4) + (wordToCharRatio * 30) + (avgWordLength * 2) - (specialCharRatio * 20);
+            
+            // Negative Qualität verhindern
+            quality = Math.max(0, quality);
+            
+            return quality;
+        }
+        
+        // Ein einzelnes Bild verarbeiten
+        async function processImage(worker, file) {
+            statusText.textContent = 'Erkenne Text...';
+            progressBar.value = 40;
+            
+            log('Starte Bilderkennung');
+            
+            try {
+                const result = await worker.recognize(file);
+                extractedText = result.data.text;
+                
+                log(`Bilderkennung abgeschlossen. Erkannter Text (${extractedText.length} Zeichen)`);
+                progressBar.value = 90;
+            } catch (error) {
+                log(`Fehler bei Bilderkennung: ${error.message}`);
+                throw error;
+            }
+        }
+        
+        // PDF verarbeiten
+        async function processPdf(worker) {
+            currentPage = 0;
+            extractedText = '';
+            
+            for (let i = 1; i <= totalPages; i++) {
+                currentPage = i;
+                
+                statusText.textContent = `Verarbeite Seite ${i} von ${totalPages}...`;
+                progressBar.value = 30 + Math.floor((i - 1) / totalPages * 40);
+                
+                log(`Verarbeite PDF-Seite ${i} von ${totalPages}`);
+                
+                try {
+                    // PDF-Seite rendern
+                    const page = await pdfDocument.getPage(i);
+                    const viewport = page.getViewport({scale: 2.5}); // Höhere Auflösung für bessere Erkennung
+                    
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    
+                    await page.render({
+                        canvasContext: context,
+                        viewport: viewport
+                    }).promise;
+                    
+                    log(`Seite ${i} gerendert (${canvas.width}x${canvas.height})`);
+                    
+                    // OCR auf das gerenderte Bild anwenden
+                    statusText.textContent = `Erkenne Text auf Seite ${i} von ${totalPages}...`;
+                    const result = await worker.recognize(canvas);
+                    
+                    const pageText = result.data.text;
+                    log(`Text auf Seite ${i} erkannt (${pageText.length} Zeichen)`);
+                    
+                    extractedText += pageText + '\n\n';
+                    
+                    // Fortschritt aktualisieren
+                    progressBar.value = 30 + Math.floor(i / totalPages * 40);
+                }
+                catch (error) {
+                    log(`Fehler bei Verarbeitung von Seite ${i}: ${error.message}`);
+                    extractedText += `[Fehler bei Seite ${i}]\n\n`;
+                }
+                
+                // UI-Update für längere Verarbeitungen
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+        }
+        
+        // Text in die Zwischenablage kopieren
+        copyBtn.addEventListener('click', () => {
+            resultText.select();
+            document.execCommand('copy');
+            statusText.textContent = 'Text wurde in die Zwischenablage kopiert!';
+            log('Text in Zwischenablage kopiert');
+        });
+        
+        // Text als Datei speichern
+        saveBtn.addEventListener('click', () => {
+            const text = resultText.value;
+            if (!text) return;
+            
+            // Dateiname erstellen
+            let filename = "erkannter-text.txt";
+            if (selectedFile) {
+                const baseName = selectedFile.name.split('.').slice(0, -1).join('.');
+                filename = baseName + "-ocr.txt";
+            }
+            
+            // Text als Datei herunterladen
+            const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            
+            // URL aufräumen
+            setTimeout(() => URL.revokeObjectURL(url), 100);
+            log(`Text als Datei "${filename}" gespeichert`);
+        });
+        
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            statusText.textContent = 'Fehler bei der Verarbeitung';
+            progressBar.value = 0;
+            log(`Fehler angezeigt: ${message}`);
+        }
+        
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' Bytes';
+            else if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+            else return (bytes / 1048576).toFixed(1) + ' MB';
+        }
+        
+        // Initialisierung
+        log('Anwendung initialisiert');
+    </script>
+</body>
+</html>
